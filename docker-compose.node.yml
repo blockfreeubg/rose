@@ -1,0 +1,31 @@
+services:
+  rose-node:
+    build: .
+    image: rose-node
+    container_name: rose-node
+    restart: unless-stopped
+    stop_grace_period: 30s   
+    logging: { driver: local, options: { max-size: 10m, max-file: "3" } }
+    networks: [rose-node]           
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - rose-node-cache:/app/cache               
+      - rose-node-data:/app/apks                
+    environment:
+      ROSE_INSTANCE: node        
+      DOCKER_NETWORK: rose-node
+      CONTAINER_PREFIX: rose-n-
+      POOL_SIZE: ${POOL_SIZE:-0}    
+      CACHE_MB: ${CACHE_MB:-8192}
+      STREAM_BITRATE: ${STREAM_BITRATE:-4000000} 
+      AUDIO: "1"
+      NODE_ALLOW_UPLOADS: ${NODE_ALLOW_UPLOADS:-0} 
+
+networks:
+  rose-node:
+    name: rose-node
+
+volumes:
+  rose-node-cache:
+  rose-node-data:
