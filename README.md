@@ -1,5 +1,9 @@
 # 🌹 Rose — lightweight cloud Android gaming
 
+# ADD AN "apks" FOLDER FOR YOUR APKS
+# ADD AN "files" FOLDER SO DOWNLOADS WORK
+# ADD AN "roms" FOLDER IF YOU WANT SWITCH ROMS TO WORK
+
 Each player session is a throwaway **Redroid** container (Android running directly on the
 host kernel, no VM), streamed to the browser with **scrcpy** (H.264), decoded with
 **WebCodecs**, and controlled with touch, mouse, keyboard or gamepad.
