@@ -1,0 +1,240 @@
+#cloud-config
+# Rose node VM, for Windows and macOS hosts (or any machine whose kernel has no Android binder).
+#
+# A small Ubuntu Server 24.04 LTS VM (amd64, or arm64 on Apple Silicon) that runs the REAL Rose
+# node: the same node-install.sh / docker-compose.node.yml as a Linux host, inside the VM, with
+# GPU_MODE=guest (a VM has no host GPU: Android renders on the CPU, so fewer and slower slots).
+# The redroid image (redroid/redroid:12.0.0_64only-latest) is multi-arch: Docker in the VM pulls
+# the amd64 or arm64 build by itself.
+#
+# Served by the hub at /node/cloud-init.yaml WITH THE PLACEHOLDERS LEFT IN. The host's installer
+# (node-install.ps1 / node-install-mac.sh) fills them in locally and passes the result to
+# "multipass launch --cloud-init":
+#   @@HUB_URL@@        the hub's address, e.g. https://rose.example.com
+#   @@NODE_TOKEN@@     the join token (rn_...), or EMPTY: the Windows/macOS installers leave it empty
+#                      and hand the token over after launch with "rose-node-install --token-stdin",
+#                      so it is never in a file on the host or in Multipass's stored cloud-init ISO
+#   @@MAX_SESSIONS@@   auto (sized from the VM's RAM/CPUs) or a number
+#   @@INSECURE@@       1 = allow a plain http:// hub on a public address, else 0
+#
+# Boot flow:
+#   rose-vm-setup.service       every boot, idempotent: binder module (reinstalls it after a kernel
+#                               update), uhid, Docker, the Android image.
+#   rose-node-install.service   until the node is installed (and once there is a token): runs the hub's node-install.sh into
+#                               /opt/rose-node. After that the rose-node container restarts with
+#                               Docker (restart: unless-stopped). Updates: rerun the host installer,
+#                               which runs /usr/local/sbin/rose-node-install again.
+#   /usr/local/sbin/rose-node-status   one status line, polled by the host installer.
+hostname: rose-node
+package_update: true
+package_upgrade: false          # a kernel upgrade here would leave the running kernel without its extras
+packages:
+  - docker.io
+  - docker-compose-v2
+  - systemd-zram-generator
+  - curl
+  - ca-certificates
+
+write_files:
+  - path: /etc/rose-node/vm.env
+    permissions: '0600'
+    content: |
+      ROSE_HUB_URL=@@HUB_URL@@
+      ROSE_NODE_TOKEN=@@NODE_TOKEN@@
+      MAX_SESSIONS=@@MAX_SESSIONS@@
+      ROSE_HUB_INSECURE=@@INSECURE@@
+
+  # Android binder: Ubuntu builds it as binder_linux in linux-modules-extra-<kernel>.
+  - path: /etc/modules-load.d/rose.conf
+    content: |
+      binder_linux
+      uhid
+  - path: /etc/modprobe.d/rose.conf
+    content: |
+      options binder_linux devices=binder,hwbinder,vndbinder
+
+  - path: /etc/sysctl.d/90-rose.conf
+    content: |
+      # zram swap is cheap: prefer it over dropping page cache; keep Android's many mappings happy.
+      vm.swappiness=100
+      vm.max_map_count=262144
+      net.ipv4.ip_forward=1
+
+  # Compressed RAM swap (sessions get RAM + SESSION_SWAP_MB of swap).
+  - path: /etc/systemd/zram-generator.conf
+    content: |
+      [zram0]
+      zram-size = ram / 2
+      compression-algorithm = zstd
+      swap-priority = 100
+
+  - path: /etc/docker/daemon.json
+    content: |
+      { "log-driver": "local", "log-opts": { "max-size": "10m" } }
+
+  - path: /usr/local/sbin/rose-vm-setup
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Idempotent; runs at every boot before the node.
+      set -u
+      log() { echo "rose-vm-setup: $*"; }
+      K=$(uname -r)
+      if ! modinfo binder_linux >/dev/null 2>&1; then
+        log "installing linux-modules-extra-$K (binder_linux)"
+        export DEBIAN_FRONTEND=noninteractive
+        APT="apt-get -o DPkg::Lock::Timeout=600 -y -qq"
+        $APT update || true
+        if ! $APT install "linux-modules-extra-$K"; then
+          # Running kernel already gone from the archive: move to the current generic kernel (it pulls
+          # its linux-modules-extra) and reboot, once per kernel so a failure can't reboot-loop.
+          M=/var/lib/rose-node-reboot-$K
+          if [ ! -e "$M" ] && $APT install linux-generic; then
+            touch "$M"; log "extras for $K unavailable; installed linux-generic, rebooting"; systemctl reboot
+            sleep 600   # stay "activating" (not "failed": the host installer would give up) until the reboot
+          else
+            log "binder_linux unavailable for kernel $K (no linux-modules-extra-$K)"
+          fi
+          exit 1
+        fi
+      fi
+      modprobe binder_linux devices=binder,hwbinder,vndbinder || { log "binder_linux failed to load"; exit 1; }
+      modprobe uhid || log "uhid unavailable (controllers limited)"
+      # Ubuntu's binder_linux exposes binderfs (no /dev/binder nodes on the VM); redroid mounts it itself.
+      grep -qw binder /proc/filesystems || { log "binderfs missing"; exit 1; }
+      systemctl enable --now docker
+      IMG=redroid/redroid:12.0.0_64only-latest   # multi-arch: amd64 or arm64, whichever this VM is
+      docker image inspect "$IMG" >/dev/null 2>&1 || docker pull "$IMG" || log "image pull failed (retried by the installer)"
+      touch /run/rose-vm-ready
+      log "ready"
+
+  - path: /usr/local/sbin/rose-node-install
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Installs or updates the Rose node in /opt/rose-node with the hub's own Linux installer.
+      #   rose-node-install                 install/update with the token in /etc/rose-node/vm.env
+      #   rose-node-install --token-stdin   first replace the token with the one line read from stdin
+      #   A fresh VM (no node yet) given --token-stdin only saves the token and starts
+      #   rose-node-install.service (retries), then returns; the host polls rose-node-status.
+      set -u
+      umask 077
+      ENV=/etc/rose-node/vm.env LOG=/var/log/rose-node-install.log
+      # cloud-init may still be writing the files when the host first gets in.
+      [ -f "$ENV" ] || cloud-init status --wait >/dev/null 2>&1 || true
+      [ -f "$ENV" ] || { echo "rose-node-install: $ENV is missing (cloud-init failed? see /var/log/cloud-init-output.log)" >&2; exit 4; }
+      if [ "${1:-}" = --token-stdin ]; then
+        IFS= read -r NEW || true
+        NEW=$(printf '%s' "$NEW" | tr -d '\r\n ')
+        [[ "$NEW" =~ ^rn_[0-9a-f]{8}_[A-Za-z0-9_-]{43}$ ]] || { echo "rose-node-install: that token does not look right" >&2; exit 2; }
+        { grep -v '^ROSE_NODE_TOKEN=' "$ENV"; printf 'ROSE_NODE_TOKEN=%s\n' "$NEW"; } > "$ENV.new" && mv "$ENV.new" "$ENV"
+        rm -f /etc/rose-node/token-refused
+        if [ ! -f /opt/rose-node/.env ]; then
+          systemctl reset-failed rose-node-install.service 2>/dev/null || true
+          systemctl start --no-block rose-node-install.service
+          echo "rose-node-install: token saved; installing in the background (rose-node-status)"
+          exit 0
+        fi
+      fi
+      # One at a time (the service and a host-run update).
+      exec 9>/run/rose-node-install.lock; flock -w 3600 9 || exit 5
+      set -a; . "$ENV"; set +a
+      # No token yet (the host installer sends it after launch): nothing to do.
+      [ -n "${ROSE_NODE_TOKEN:-}" ] || { echo "rose-node-install: no join token yet"; exit 0; }
+      HUB="${ROSE_HUB_URL%/}"
+      args=(--hub "$HUB" --dir /opt/rose-node --gpu guest --max "${MAX_SESSIONS:-auto}")
+      [ "${ROSE_HUB_INSECURE:-0}" = 1 ] && args+=(--insecure)
+      work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+      {
+        echo "=== $(date -Is) installing the Rose node from $HUB"
+        if ! curl -fsS --retry 5 --retry-delay 5 --retry-all-errors -o "$work/install.sh" "$HUB/node/install.sh"; then
+          echo "!! could not download $HUB/node/install.sh"; exit 3
+        fi
+        # The token goes in through the environment (node-install.sh reads ROSE_NODE_TOKEN), not argv.
+        HOME=/root bash "$work/install.sh" "${args[@]}" </dev/null
+      } >>"$LOG" 2>&1
+      rc=$?
+      if [ "$rc" != 0 ] && tail -n 5 "$LOG" | grep -q 'refused the token'; then
+        touch /etc/rose-node/token-refused   # don't retry a revoked/mistyped token (the hub locks out repeat misses)
+        exit 0
+      fi
+      # node-install.sh exits non-zero if the node did not connect within 2 minutes, but the
+      # container stays up and keeps retrying: installed counts as done.
+      [ -f /opt/rose-node/.env ] && docker inspect rose-node >/dev/null 2>&1 && exit 0
+      exit "$rc"
+
+  - path: /usr/local/sbin/rose-node-status
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # One line for the host installer: online <text> | refused | failed <text> | starting <text>
+      LOG=/var/log/rose-node-install.log
+      noansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+      if [ -f /etc/rose-node/token-refused ]; then echo "refused"; exit 0; fi
+      if docker inspect rose-node >/dev/null 2>&1; then
+        # The whole log (it is capped by the local log driver): a busy node scrolls "connected" out of a tail.
+        last=$(docker logs rose-node 2>&1 | grep -E 'connected to hub as|cannot start:|token revoked|disconnected|reconnect' | tail -n1 | noansi)
+        case "$last" in
+          *"connected to hub as"*) echo "online ${last#* node: }"; exit 0 ;;
+          *"cannot start:"*|*"token revoked"*) echo "failed ${last}"; exit 0 ;;
+        esac
+        echo "starting node container is up, connecting to the hub"; exit 0
+      fi
+      if systemctl is-failed --quiet rose-vm-setup.service; then echo "failed $(journalctl -u rose-vm-setup -n 3 --no-pager -o cat | tail -n1)"; exit 0; fi
+      if [ -s "$LOG" ]; then
+        l=$(grep -v '^\s*$' "$LOG" | tail -n1 | noansi)
+        # Only an installer error ("!! ..." at the start of the line; warnings are indented) once the
+        # service has stopped for good (not while it runs, or waits to retry: ActiveState=activating).
+        case "$l" in '!! '*)
+          st=$(systemctl show -p ActiveState --value rose-node-install.service 2>/dev/null)
+          case "$st" in activating|active) echo "starting $l (retrying)"; exit 0 ;; *) echo "failed $l"; exit 0 ;; esac ;;
+        esac
+        echo "starting $l"; exit 0
+      fi
+      if [ -e /run/rose-vm-ready ] && ! grep -qE '^ROSE_NODE_TOKEN=.+' /etc/rose-node/vm.env 2>/dev/null; then echo "starting waiting for the join token"; exit 0; fi
+      if [ -e /run/rose-vm-ready ]; then echo "starting downloading the node"; else echo "starting preparing the VM (binder, Docker, Android image)"; fi
+
+  - path: /etc/systemd/system/rose-vm-setup.service
+    content: |
+      [Unit]
+      Description=Rose VM setup (binder module, docker, Android image)
+      # NOT After=cloud-final.service: cloud-final is ordered after multi-user.target, so that would be an
+      # ordering cycle and systemd drops this job on every reboot. First boot: runcmd starts it.
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/rose-vm-setup
+      TimeoutStartSec=1800
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/rose-node-install.service
+    content: |
+      [Unit]
+      Description=Rose node install (until it is installed; then Docker restarts it at boot)
+      Requires=rose-vm-setup.service
+      After=rose-vm-setup.service docker.service network-online.target
+      Wants=network-online.target
+      ConditionPathExists=!/opt/rose-node/.env
+      ConditionPathExists=!/etc/rose-node/token-refused
+      StartLimitIntervalSec=0
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/rose-node-install
+      TimeoutStartSec=3600
+      Restart=on-failure
+      RestartSec=120
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [sysctl, --system]
+  - [systemctl, daemon-reload]
+  - [systemctl, start, systemd-zram-setup@zram0.service]
+  - [systemctl, enable, rose-vm-setup.service, rose-node-install.service]
+  # --no-block: don't hold cloud-init open for the image pull and build. Later boots: multi-user.target.
+  - [systemctl, start, --no-block, rose-node-install.service]
+
+final_message: "Rose node VM: cloud-init done after $UPTIME s"

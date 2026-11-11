@@ -1,0 +1,46 @@
+# Public https link to Rose through a Cloudflare quick tunnel, started at boot.
+#
+# Install (once):
+#   sudo pacman -S --needed cloudflared
+#   sudo install -m 644 scripts/rose-tunnel.service /etc/systemd/system/rose-tunnel.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now rose-tunnel
+# The link (a new random *.trycloudflare.com address every time the tunnel starts):
+#   scripts/tunnel-url.sh
+# Stop sharing:  sudo systemctl disable --now rose-tunnel
+#
+# It talks to Rose on 127.0.0.1:8081, the port docker-compose.yml publishes for it on this PC only
+# (TUNNEL_PORT), so Rose knows the visitor addresses Cloudflare reports there are genuine.
+[Unit]
+Description=Cloudflare quick tunnel to Rose (public *.trycloudflare.com link)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8081
+Restart=always
+RestartSec=5
+# A throwaway system user with no access to your files: a quick tunnel needs no config or keys.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

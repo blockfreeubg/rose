@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><meta name="referrer" content="origin">
+<style>html,body{margin:0;padding:0;background:transparent;color-scheme:dark;overflow:hidden;display:flex;justify-content:center}</style>
+</head><body>
+<!-- One ad unit. Loaded only inside a sandboxed iframe (no allow-same-origin) from public/queue.js,
+     so ad code can't read Rose's storage, cookies or page, or navigate it. -->
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var UNITS = {
+    '771c384fe775fb2b9877f709cb6467aa': [468, 60],
+    'cfeb76f267af02c56291eda03391d671': [160, 300],
+    'b03d8fcbc6977bfd8c4b3c92ad90853f': [160, 600],
+    'fb510fa83b3b4090ca4c0057c60fa0c7': [728, 90],
+    '5d6b58958b083253b3f2c1937777c37c': [320, 50]
+  };
+  if (q.get('native') === '1') {
+    var id = '563299179b3e26460ffa8b88b4e47bf4';
+    var s = document.createElement('script');
+    s.async = true; s.setAttribute('data-cfasync', 'false');
+    s.src = 'https://bauval.org/21/' + id;
+    document.body.appendChild(s);
+    var d = document.createElement('div'); d.id = 'container-' + id; d.style.width = '100%';
+    document.body.appendChild(d);
+    return;
+  }
+  var k = q.get('k'), u = UNITS[k];
+  if (!u) return;
+  window.atOptions = { key: k, format: 'iframe', height: u[1], width: u[0], params: {} };
+  document.write('<script src="https://bauval.org/22/' + k + '"><\/script>');
+})();
+</script>
+</body></html>

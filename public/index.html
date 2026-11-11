@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#060a0b">
+  <title>Rose</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="img/rose-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="img/rose-192.png">
+  <link rel="apple-touch-icon" href="img/rose-192.png">
+  <!-- Montserrat (SIL OFL 1.1) is self-hosted (public/fonts, @font-face in style.css): no Google round trips. -->
+  <link rel="preload" href="fonts/montserrat-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ============ Top bar ============ -->
+  <header id="topbar">
+    <a class="brand" href="#home">
+      <span class="brand-mark">R</span><span class="brand-word">Rose</span>
+    </a>
+    <nav class="tabs">
+      <a href="#home" data-tab="home" class="active"><svg viewBox="0 0 24 24"><path d="M12 3 2.5 11.2l1.3 1.5L5 11.7V20a1 1 0 0 0 1 1h4.5v-6h3v6H18a1 1 0 0 0 1-1v-8.3l1.2 1 1.3-1.5z"/></svg><span>Home</span></a>
+      <a href="#library" data-tab="library"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg><span>Library</span></a>
+      <!-- Mobile tab bar only (the top bar has the avatar button, auth.js); shown when accounts are on -->
+      <a href="#profile" data-tab="profile" class="tab-profile" hidden><svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"/></svg><span>Profile</span></a>
+    </nav>
+    <label class="search">
+      <svg viewBox="0 0 24 24"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></svg>
+      <input id="search" type="search" placeholder="Search your games" autocomplete="off">
+    </label>
+    <div class="topbar-right">
+      <div id="rigs" class="rigs" title="Server capacity"><span class="dot"></span><span id="rigsText">—</span></div>
+    </div>
+  </header>
+
+  <!-- ============ Home ============ -->
+  <main id="view-home" class="view">
+    <section id="hero" class="hero" hidden>
+      <div class="hero-bg" id="heroBg"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-content">
+        <div class="hero-text">
+          <div class="eyebrow" id="heroEyebrow">Featured</div>
+          <div class="hero-titleline">
+            <div class="hero-art" id="heroArt"></div>
+            <h1 id="heroTitle"></h1>
+          </div>
+          <p class="hero-blurb" id="heroBlurb"></p>
+          <div class="hero-meta" id="heroMeta"></div>
+          <div class="hero-actions">
+            <button id="heroPlay" class="btn btn-play btn-xl"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play</button>
+            <button id="heroInfo" class="btn btn-glass btn-xl">Details</button>
+          </div>
+        </div>
+        <div class="hero-device" id="heroDevice"></div>
+      </div>
+      <div class="hero-dots" id="heroDots"></div>
+    </section>
+
+    <div id="rows" class="rows"></div>
+
+    <section id="emptyHome" class="empty" hidden>
+      <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.9 4.4a2.5 2.5 0 0 1-4.3 1.1L14.2 16H9.8l-2.5 2.5A2.5 2.5 0 0 1 3 17.4L2.1 13A5 5 0 0 1 7 7zm1 3v2H6v2h2v2h2v-2h2v-2h-2v-2zm7.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm3-2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></div>
+      <h2>No games yet</h2>
+      <p>Games added on the upload page show up here, ready to play in the cloud from any browser.</p>
+    </section>
+  </main>
+
+  <!-- ============ Library ============ -->
+  <main id="view-library" class="view" hidden>
+    <div class="lib-head">
+      <h1>Library <span id="libCount" class="count"></span></h1>
+      <div class="lib-tools">
+        <div id="chips" class="chips"></div>
+        <select id="sort" class="select">
+          <option value="recent">Recently played</option>
+          <option value="added">Recently added</option>
+          <option value="az">A–Z</option>
+        </select>
+      </div>
+    </div>
+    <div id="libGrid" class="lib-grid"></div>
+  </main>
+
+  <!-- ============ Upload (password protected) ============ -->
+  <main id="view-upload" class="view" hidden>
+    <section id="upLock" class="up-lock">
+      <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V7a3 3 0 0 0-3-3zm0 9a2 2 0 0 0-1 3.7V19h2v-2.3A2 2 0 0 0 12 13z"/></svg></div>
+      <h1>Upload</h1>
+      <p>Enter the upload password to add, edit or remove games.</p>
+      <form id="upLogin" class="up-login">
+        <input name="pass" type="password" class="input" placeholder="Upload password" autocomplete="current-password" required>
+        <button class="btn btn-play" id="upLoginBtn">Unlock</button>
+      </form>
+      <p class="up-err" id="upErr" role="alert"></p>
+    </section>
+    <section id="upPanel" hidden>
+      <div class="lib-head">
+        <h1>Upload <span id="upCount" class="count"></span></h1>
+        <div class="lib-tools">
+          <button class="btn btn-play" data-action="add"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg><span>Add game</span></button>
+          <button class="btn btn-ghost" id="upLock2">Lock</button>
+        </div>
+      </div>
+      <p class="up-hint">Upload an Android game (.apk, or a split bundle .apkm / .apks / .xapk) or a Switch game, or paste a download link. You can also drop a file anywhere on this page.</p>
+      <div id="upList" class="up-list"></div>
+
+      <!-- Rose nodes: other people's machines that run sessions for this server (/api/nodes) -->
+      <section id="upHosts" class="up-hosts" hidden>
+        <div class="up-hosts-head">
+          <h2>Hosts <span id="hostCount" class="count"></span></h2>
+          <label class="up-place"><span>New sessions go to</span>
+            <select id="hostPlace" class="select">
+              <option value="local-first">This server first</option>
+              <option value="nodes-first">Hosts first</option>
+              <option value="balanced">Whichever is least busy</option>
+            </select></label>
+        </div>
+        <p class="up-hint">Hosts are other people's computers or servers running Rose sessions for this server, so more people can play at once. Players reach them through this server and never see their address. <a class="link" href="#host">How hosting works</a></p>
+        <form id="hostForm" class="host-form" autocomplete="off">
+          <input name="name" class="input" maxlength="40" placeholder="Host name, e.g. alex-desktop" required>
+          <button class="btn btn-play" id="hostAdd">Create join token</button>
+        </form>
+        <div id="hostNew" class="host-new" hidden></div>
+        <div id="hostList" class="up-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <!-- ============ Host a Rose node (public) ============ -->
+  <main id="view-host" class="view" hidden>
+    <article class="host-page">
+      <div class="eyebrow">Rose nodes</div>
+      <h1>Host a Rose node</h1>
+      <p class="host-lead">Lend your PC or server to this Rose: it runs game sessions on your hardware, so more people can play at once. Your machine connects out to this server, so there are no ports to open, and players never learn your address (or you theirs).</p>
+
+      <section class="host-sec" id="hostOs">
+        <h2>What you need</h2>
+        <div class="auth-tabs os-tabs" role="tablist" aria-label="Your system">
+          <button type="button" role="tab" data-os-tab="linux">Linux</button>
+          <button type="button" role="tab" data-os-tab="windows">Windows</button>
+          <button type="button" role="tab" data-os-tab="mac">macOS</button>
+        </div>
+        <ul class="host-list" data-os="linux">
+          <li><b>Linux on x86_64</b> (or arm64) with <b>Docker</b> and the compose plugin.</li>
+          <li><b>Binder</b> in the kernel, which Android needs: binderfs built in, or the <code>binder_linux</code> module (Ubuntu/Debian: <code>linux-modules-extra</code>, or <code>binder_linux-dkms</code>). WSL2 and many stock VPS kernels need a custom kernel or module; container-based VPSes (OpenVZ/LXC) can't run it at all.</li>
+          <li><b>GPU optional:</b> an AMD or Intel GPU (<code>/dev/dri</code>) makes games smoother; without one, sessions render on the CPU. The <code>uhid</code> module is recommended for controllers in console games.</li>
+          <li><b>Per player:</b> about 2.5 GB RAM and 2 CPU threads for an Android game, about 6 GB and 4 threads for Switch homebrew, plus 2 GB for the system. The node sizes itself from your machine.</li>
+          <li><b>Disk:</b> 20 GB or more (Android image, game downloads cache).</li>
+          <li><b>Bandwidth:</b> about 4 to 6 Mbit/s of <i>upload</i> per player, plus game downloads.</li>
+        </ul>
+        <ul class="host-list" data-os="windows" hidden>
+          <li><b>Windows 10 (1809 or later) or Windows 11</b>, 64-bit: Home, Pro or Enterprise. Android needs a Linux kernel, so the installer sets up <b>Multipass</b> (Canonical's Ubuntu VM manager, through winget) and runs the node in a small Ubuntu VM.</li>
+          <li><b>Virtualization on</b> in the BIOS/UEFI (Intel VT-x or AMD-V/SVM), and the Windows feature <b>Virtual Machine Platform</b>: the installer offers to turn it on (then restart Windows and run it again). Multipass 1.17 or later uses Windows' built-in hypervisor on every edition, Home included; older Multipass needed Hyper-V (Pro/Enterprise) or VirtualBox (Home).</li>
+          <li><b>No GPU acceleration:</b> games in the VM render on the CPU, so a PC hosts fewer players than the same PC on Linux, and heavy 3D games run slower.</li>
+          <li><b>RAM and CPU:</b> 9 GB RAM and 4 CPU threads at least. The VM takes half the RAM (leaving Windows at least 4 GB, reserved while it runs) and all threads but 2; change it with <code>-MemoryGB</code> and <code>-Cpus</code>.</li>
+          <li><b>Expect:</b> 16 GB, 8 threads: an 8 GB / 6 CPU VM, about <b>2 players</b>. 32 GB, 12 threads: 16 GB / 10 CPUs, about <b>4 players</b>.</li>
+          <li><b>Disk:</b> 30 GB for the VM (<code>-DiskGB</code>). <b>Bandwidth:</b> about 4 to 6 Mbit/s of <i>upload</i> per player.</li>
+        </ul>
+        <ul class="host-list" data-os="mac" hidden>
+          <li><b>macOS 14 Sonoma or later</b> (13 Ventura with an older Multipass), on <b>Apple Silicon</b> (M1 or later) or <b>Intel</b>. Android needs a Linux kernel, so the installer sets up <b>Multipass</b> (with Homebrew if you have it, otherwise Canonical's installer) and runs the node in a small Ubuntu VM.</li>
+          <li><b>Apple Silicon:</b> the VM is ARM (arm64), so Android games built for ARM, which is most of them, run natively. Games with only x86 code and Switch homebrew are never sent to your Mac.</li>
+          <li><b>No GPU acceleration:</b> games in the VM render on the CPU, so expect fewer players than on a Linux PC, and heavy 3D games run slower.</li>
+          <li><b>RAM and CPU:</b> 9 GB RAM and 4 CPU cores at least (8 GB Macs are too small). The VM takes half the RAM (leaving macOS at least 4 GB, reserved while it runs) and all cores but 2; change it with <code>--memory</code> and <code>--cpus</code>.</li>
+          <li><b>Expect:</b> 16 GB, 10 cores: an 8 GB / 8 CPU VM, about <b>2 players</b>. 32 GB, 12 cores: 16 GB / 10 CPUs, about <b>4 players</b>.</li>
+          <li><b>Disk:</b> 30 GB for the VM (<code>--disk</code>). <b>Bandwidth:</b> about 4 to 6 Mbit/s of <i>upload</i> per player.</li>
+        </ul>
+      </section>
+
+      <section class="host-sec">
+        <h2>Set it up</h2>
+        <ol class="host-steps">
+          <li>Ask the owner of this Rose for a <b>join token</b>. They create one under Upload → Hosts.</li>
+          <li>Run the command they give you<span data-os="linux"> in a terminal</span><span data-os="windows" hidden> in <b>PowerShell</b> (Start, type PowerShell; not as Administrator: it asks when it needs to)</span><span data-os="mac" hidden> in <b>Terminal</b></span>. It checks the requirements, <span data-os="windows mac" hidden>creates the VM, </span>downloads the node, and starts it:
+            <pre class="host-cmd" id="hostCmd" data-os="linux"></pre><pre class="host-cmd" id="hostCmdWin" data-os="windows" hidden></pre><pre class="host-cmd" id="hostCmdMac" data-os="mac" hidden></pre></li>
+          <li>Done: it shows up as online for the owner. <span data-os="linux">Check it with <code>docker logs -f rose-node</code>.</span><span data-os="windows mac" hidden>The first start takes 5 to 15 minutes. Check it with <code>multipass exec rose-node -- sudo docker logs -f rose-node</code>.</span></li>
+        </ol>
+        <p class="fine" data-os="linux">To stop it: <code>cd ~/rose-node &amp;&amp; docker compose -f docker-compose.node.yml down</code>. To remove it completely: <code id="hostUninstall"></code></p>
+        <p class="fine" data-os="windows mac" hidden>To stop it and free its RAM: <code>multipass stop rose-node</code> (start it again with <code>multipass start rose-node</code>). To update it, run the install command again. To remove it completely: <code id="hostUninstallWin" data-os="windows" hidden></code><code id="hostUninstallMac" data-os="mac" hidden></code></p>
+      </section>
+
+      <section class="host-sec host-warn">
+        <h2>Before you host</h2>
+        <ul class="host-list">
+          <li>Sessions are <b>privileged Android containers</b> on your machine, started through Docker by code from this server. Only join a Rose you trust.</li>
+          <li>Games' own internet traffic goes out from <b>your</b> connection and IP address.</li>
+          <li>Players can't install their own apps or files on your machine unless you turn that on (<code>NODE_ALLOW_UPLOADS=1</code>).</li>
+          <li>The owner can disable or remove your node at any time, and you can stop it at any time; running sessions then end.</li>
+        </ul>
+      </section>
+
+      <section class="host-sec">
+        <h2>For players</h2>
+        <p>When a game runs on a community host, the launch screen and the in-game menu say “Hosted by” and the host's name. That game runs on that person's computer, which can see what you type into it: <b>don't type passwords into games on community hosts.</b></p>
+      </section>
+    </article>
+  </main>
+
+  <!-- ============ Profile: the account and Rose+, a free test subscription (server/plus.js) ============ -->
+  <main id="view-profile" class="view" hidden>
+    <article class="pf-page">
+      <div class="eyebrow">Your account</div>
+      <h1>Profile</h1>
+
+      <section class="pf-card pf-off" id="pfOff" hidden>
+        <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"/></svg></div>
+        <h2>Sign-in is off on this server</h2>
+        <p>There are no accounts here, so there is no Rose+ either. Everything in the library, Switch games included, is open to everyone who can reach this server.</p>
+      </section>
+
+      <div class="pf-loading" id="pfLoading" hidden>
+        <p id="pfLoadMsg" role="status">Loading your profile…</p>
+        <button type="button" class="btn btn-ghost" id="pfRetry" hidden>Try again</button>
+        <button type="button" class="btn btn-ghost" id="pfErrOut" hidden>Sign out</button>
+      </div>
+
+      <div id="pfOn" hidden>
+        <section class="pf-card pf-account" aria-labelledby="pfAcctTitle">
+          <span class="pf-avatar" id="pfAvatar" aria-hidden="true"></span>
+          <div class="pf-who">
+            <h2 id="pfAcctTitle">Signed in as</h2>
+            <div class="pf-email" id="pfEmail"></div>
+            <div class="pf-tier" id="pfTier"></div>
+          </div>
+          <button type="button" class="btn btn-ghost" id="pfSignOut">Sign out</button>
+        </section>
+        <p class="fine pf-fine">To change your password, sign out and choose “Forgot password?” on the sign-in screen.</p>
+
+        <section class="pf-card pf-plus" id="pfPlus" aria-labelledby="pfPlusTitle">
+          <!-- Why the visitor was sent here: a Switch game they tried to play (needPlus) -->
+          <div class="pf-ask" id="pfAsk" role="status" hidden></div>
+          <div class="pf-plus-head">
+            <div class="pf-plus-name">
+              <h2 id="pfPlusTitle">Rose<span class="pf-plus-sign">+</span></h2>
+              <span class="tag pf-test">Test subscription · no charge</span>
+            </div>
+            <div class="pf-status" id="pfStatus" aria-live="polite">Not active</div>
+          </div>
+          <ul class="pf-perks">
+            <li><span class="pf-perk-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.9 4.4a2.5 2.5 0 0 1-4.3 1.1L14.2 16H9.8l-2.5 2.5A2.5 2.5 0 0 1 3 17.4L2.1 13A5 5 0 0 1 7 7zm1 3v2H6v2h2v2h2v-2h2v-2h-2v-2zm7.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm3-2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></span>
+              <div><b>Switch games</b><span>Switch homebrew and the Eden emulator, streamed to your browser like any other game.</span></div></li>
+            <li><span class="pf-perk-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 0 1 6.3 12.9L7.1 5.7A8 8 0 0 1 12 4zM4 12a8 8 0 0 1 1.7-4.9l11.2 11.2A8 8 0 0 1 4 12z"/></svg></span>
+              <div><b>No ads</b><span>When every rig is busy, you wait in a calm line with no ads.</span></div></li>
+            <li><span class="pf-perk-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></span>
+              <div><b>Priority queue</b><span>You wait ahead of everyone without Rose+, so your game starts sooner.</span></div></li>
+          </ul>
+          <div class="pf-actions">
+            <button type="button" class="btn btn-play btn-xl" id="pfStart">Start Rose+ (free test)</button>
+            <button type="button" class="btn btn-play btn-xl" id="pfPlay" hidden></button>
+            <button type="button" class="btn btn-ghost" id="pfCancel" hidden>Cancel Rose+</button>
+          </div>
+          <p class="fine">Test subscription: no charge, cancel anytime. Nothing is billed and no payment details are asked for.</p>
+        </section>
+      </div>
+    </article>
+  </main>
+
+  <!-- ============ Game page ============ -->
+  <main id="view-game" class="view" hidden>
+    <section class="gp-hero">
+      <div class="gp-bg" id="gpBg"></div>
+      <div class="gp-shade"></div>
+      <div class="gp-head">
+        <div class="gp-main">
+          <a class="gp-back" href="#library">‹ Library</a>
+          <div class="eyebrow" id="gpCat"></div>
+          <div class="gp-titleline"><div class="gp-art" id="gpArt"></div><h1 id="gpTitle"></h1></div>
+          <div class="gp-by" id="gpBy"></div>
+          <div class="gp-meta" id="gpMeta"></div>
+          <div class="gp-plus" id="gpPlus" hidden></div>
+          <div class="hero-actions">
+            <button id="gpPlay" class="btn btn-play btn-xl"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play now</button>
+            <button id="gpTrailerBtn" class="btn btn-glass btn-xl" hidden><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zm6 3v8l6-4z"/></svg>Trailer</button>
+            <button id="gpReviewBtn" class="btn btn-glass btn-xl">★ Write a review</button>
+            <button id="gpMore" class="btn btn-glass btn-icon btn-xl" aria-label="More">⋯</button>
+          </div>
+        </div>
+      </div>
+      <div class="hero-device gp-device" id="gpDevice"></div>
+    </section>
+    <div class="gp-sticky" id="gpSticky"><div class="art" id="gpStickyArt"></div><b id="gpStickyTitle"></b><button class="btn btn-play" id="gpStickyPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play</button></div>
+    <div class="gp-body">
+      <div class="gp-col">
+        <section id="gpMedia" class="gp-section" hidden>
+          <h2>Screenshots &amp; video</h2>
+          <div class="gp-media" id="gpMediaTrack"></div>
+        </section>
+        <section class="gp-section">
+          <h2>About this game</h2>
+          <p id="gpAbout" class="gp-about"></p>
+          <div id="gpTopics" class="gp-topics"></div>
+          <div id="gpStore" class="gp-store"></div>
+        </section>
+        <section class="gp-section" id="gpReviews">
+          <div class="gp-rev-head">
+            <h2>Player reviews</h2>
+          </div>
+          <div class="gp-rev-summary" id="gpRevSummary"></div>
+          <form id="gpRevForm" class="gp-rev-form" autocomplete="off">
+            <div class="gp-rev-stars" id="gpRevStars" role="radiogroup" aria-label="Your rating"></div>
+            <input name="name" class="input" maxlength="40" placeholder="Your name (optional)">
+            <textarea name="text" class="input" maxlength="2000" rows="3" placeholder="What did you think? How well does it run?"></textarea>
+            <div class="gp-rev-actions"><span id="gpRevCount" class="muted"></span><button class="btn btn-play" id="gpRevSubmit">Post review</button></div>
+          </form>
+          <div id="gpRevList" class="gp-rev-list"></div>
+        </section>
+      </div>
+      <aside class="gp-side">
+        <dl class="gp-info" id="gpInfo"></dl>
+      </aside>
+    </div>
+    <div id="gpSimilar"></div>
+  </main>
+
+  <dialog id="lightbox" class="lightbox">
+    <button class="lb-x" data-lb="close" aria-label="Close">✕</button>
+    <button class="lb-nav l" data-lb="prev" aria-label="Previous">‹</button>
+    <div class="lb-stage" id="lbStage"></div>
+    <button class="lb-nav r" data-lb="next" aria-label="Next">›</button>
+    <div class="lb-count" id="lbCount"></div>
+  </dialog>
+
+  <!-- ============ Game details ============ -->
+  <dialog id="details" class="modal modal-wide">
+    <div class="details-hero">
+      <div class="details-bg" id="dBg"></div>
+      <div class="details-shade"></div>
+      <button class="modal-x" data-close aria-label="Close">✕</button>
+      <div class="details-head">
+        <div class="details-art" id="dArt"></div>
+        <div class="details-main">
+          <div class="eyebrow" id="dCat"></div>
+          <h2 id="dTitle"></h2>
+          <div class="hero-actions">
+            <button id="dPlay" class="btn btn-play btn-xl"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play</button>
+            <button id="dEdit" class="btn btn-glass">Edit</button>
+            <button id="dRemove" class="btn btn-glass btn-danger-text">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dl class="details-grid" id="dInfo"></dl>
+  </dialog>
+
+  <!-- ============ Add / edit ============ -->
+  <dialog id="addDialog" class="modal">
+    <form id="addForm" method="dialog">
+      <!-- type="button": otherwise Enter in a field submits with the first submit button (this ✕) and discards the form -->
+      <button type="button" class="modal-x" value="cancel" aria-label="Close">✕</button>
+      <h2 id="addTitle">Add game</h2>
+      <label class="drop" id="drop">
+        <input name="apk" type="file" accept=".apk,.apkm,.apks,.xapk,.nro,.nsp,.xci">
+        <svg viewBox="0 0 24 24"><path d="M11 15V7.8L8.4 10.4 7 9l5-5 5 5-1.4 1.4L13 7.8V15zm-6 4v-4h2v2h10v-2h2v4z"/></svg>
+        <strong id="dropText">Drop a game file here or click to browse</strong>
+        <span>.apk, split bundles .apkm · .apks · .xapk, or Switch .nro · .nsp · .xci</span>
+      </label>
+      <label class="field" id="urlField"><span>…or paste a download link<small>Nothing is stored on the server: it’s downloaded when you play</small></span>
+        <input name="url" type="url" class="input" placeholder="https://…/game.apk" autocomplete="off" spellcheck="false"></label>
+      <label class="field" id="apkPick"><span>…or use a file already on the server</span><select name="apkName" class="select"><option value="">—</option></select></label>
+      <div class="two">
+        <label class="field"><span>Title</span><input name="title" class="input" placeholder="Auto-detected"></label>
+        <label class="field"><span>Category</span><input name="category" class="input" list="catList" placeholder="e.g. Action"></label>
+      </div>
+      <datalist id="catList"></datalist>
+      <div id="metaFields" hidden>
+        <label class="field"><span>Description<small>Leave empty to use the store’s</small></span><textarea name="about" class="input" rows="3" maxlength="4000"></textarea></label>
+        <label class="field"><span>Trailer<small>A YouTube link</small></span><input name="trailer" class="input" placeholder="https://youtu.be/…" autocomplete="off"></label>
+        <label class="field"><span>Screenshots<small>Image links, one per line</small></span><textarea name="screenshots" class="input" rows="3" spellcheck="false"></textarea></label>
+      </div>
+      <label class="field" id="coverField"><span>Cover art<small>Optional; bundles use their own icon</small></span><input name="cover" type="file" accept="image/*" class="input"></label>
+      <label class="field" id="fileField"><span>Companion file for emulators<small>From the server’s <code>files/</code> folder</small></span>
+        <select name="file" class="select"><option value="">None</option></select></label>
+      <p class="fine">Only add games, firmware and keys you legally own.</p>
+      <div class="progress" id="addProgress" hidden><div></div></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" value="cancel">Cancel</button>
+        <button id="addSubmit" class="btn btn-play" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Launch screen ============ -->
+  <section id="launch" hidden>
+    <div class="launch-bg" id="lBg"></div>
+    <div class="launch-shade"></div>
+    <div class="launch-center">
+      <div class="launch-art" id="lArt"></div>
+      <h1 id="lTitle"></h1>
+      <div class="launch-status" id="lStatus"></div>
+      <!-- A session on a Rose node (someone else's machine): who runs it, and what that means -->
+      <div class="host-note" id="lHost" hidden></div>
+      <ol class="steps" id="lSteps"><li>Rig</li><li>Stream</li><li>Install</li><li>Launch</li></ol>
+      <div class="launch-bar"><div id="lBar"></div></div>
+      <div class="launch-foot"><span id="lTime">0:00</span><span class="sep">·</span><span id="lTip"></span></div>
+      <button id="lCancel" class="btn btn-glass">Cancel</button>
+    </div>
+  </section>
+
+  <!-- ============ Stream ============ -->
+  <section id="player" hidden>
+    <canvas id="screen" tabindex="0"></canvas>
+    <div id="kmLayer" aria-hidden="true"></div>
+    <div id="hud" hidden></div>
+    <div id="hint">Press <kbd>Ctrl</kbd> + <kbd>G</kbd> for the menu</div>
+    <button id="menuTab" aria-label="Open menu"><svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg></button>
+
+    <aside id="overlay" hidden>
+      <div class="ov-head">
+        <div class="ov-art" id="oArt"></div>
+        <div class="ov-headtext">
+          <div class="ov-title" id="oTitle">Android</div>
+          <div class="ov-sub"><span class="live"></span><span id="oTime">0:00</span> in session</div>
+        </div>
+        <button class="ov-x" id="oClose" aria-label="Close menu">✕</button>
+      </div>
+      <div class="host-note ov-host" id="oHost" hidden></div>
+
+      <div class="ov-stats">
+        <div><b id="sFps">–</b><span>FPS</span></div>
+        <div><b id="sRtt">–</b><span>Latency</span></div>
+        <div><b id="sKbps">–</b><span>Bitrate</span></div>
+        <div><b id="sRes">–</b><span>Resolution</span></div>
+      </div>
+
+      <div class="ov-section">Controls</div>
+      <div class="ov-grid">
+        <button data-nav="back"><svg viewBox="0 0 24 24"><path d="M15.4 6.4 14 5l-7 7 7 7 1.4-1.4L9.8 12z"/></svg>Back</button>
+        <button id="oVolDown" class="ov-volbtn" title="Lower the volume in this browser"><svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4L9 9zm11.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>Vol −</button>
+        <button id="oVolUp" class="ov-volbtn" title="Raise the volume in this browser"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm10.5 3A4.5 4.5 0 0 0 11 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>Vol +</button>
+        <button id="oRotate"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.7 6h-2.1A6 6 0 1 0 18 14h2.1A8 8 0 1 1 12 4zm4 2 4-2v6h-6z"/></svg>Rotate</button>
+      </div>
+
+      <!-- Game audio (browser-side volume). Hidden when this browser can't decode it (no WebCodecs Opus). -->
+      <div class="ov-section" id="oSoundHead" hidden>Sound</div>
+      <div class="ov-list" id="oSound" hidden>
+        <button id="oMute"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm10.5 3A4.5 4.5 0 0 0 11 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>Game sound<span class="switch" id="muteSwitch"></span></button>
+        <label class="ov-vol" for="oVol"><svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4L9 9zm11.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg><span class="ov-vol-label">Volume</span><input id="oVol" type="range" min="0" max="100" step="5" value="100" aria-label="Game volume"><span id="oVolVal" class="ov-vol-val">100%</span></label>
+      </div>
+
+      <div class="ov-section">Tools</div>
+      <div class="ov-list">
+        <button id="oKbd"><svg viewBox="0 0 24 24"><path d="M3 6h18v12H3zm2 2v2h2V8zm4 0v2h2V8zm4 0v2h2V8zm4 0v2h2V8zM5 12v2h2v-2zm4 4h6v-2H9zm8-4v2h2v-2z"/></svg>Type text</button>
+        <label id="oApkRow"><input id="apkUpload" type="file" accept=".apk,.apkm,.apks,.xapk" hidden><svg viewBox="0 0 24 24"><path d="M11 15V7.8L8.4 10.4 7 9l5-5 5 5-1.4 1.4L13 7.8V15zm-6 4v-4h2v2h10v-2h2v4z"/></svg>Install an app</label>
+        <label id="oFileRow"><input id="fileUpload" type="file" hidden><svg viewBox="0 0 24 24"><path d="M6 2h8l6 6v14H6zm7 1.5V9h5.5z"/></svg>Send a file to Downloads</label>
+        <button id="oPad"><svg viewBox="0 0 24 24"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.9 4.4a2.5 2.5 0 0 1-4.3 1.1L14.2 16H9.8l-2.5 2.5A2.5 2.5 0 0 1 3 17.4L2.1 13A5 5 0 0 1 7 7zm1 3v2H6v2h2v2h2v-2h2v-2h-2v-2zm7.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm3-2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Keyboard as controller<span class="switch" id="padSwitch"></span></button>
+        <div id="padLegend" class="pad-legend" hidden></div>
+        <button id="oKm" title="Keys and the mouse press the game's on-screen controls (landscape only)"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 1 7.87V14h6a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h6V9.87A4 4 0 0 1 12 2zM7 17a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Keyboard to touch controls<span class="switch" id="kmSwitch"></span></button>
+        <div id="kmLegend" class="pad-legend" hidden></div>
+        <div id="kmTools" class="km-tools" hidden>
+          <button id="oKmEdit" class="btn btn-glass btn-sm">Edit controls</button>
+          <button id="oKmLabels" class="btn btn-ghost btn-sm">Key labels<span class="switch" id="kmLabelSwitch"></span></button>
+        </div>
+        <button id="oHud"><svg viewBox="0 0 24 24"><path d="M3 13h4v8H3zm7-6h4v14h-4zm7-4h4v18h-4z"/></svg>Performance overlay<span class="switch" id="hudSwitch"></span></button>
+        <button id="oFs"><svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>Fullscreen</button>
+      </div>
+
+      <div class="ov-foot">
+        <button id="oLeave" class="btn btn-glass">Back to library</button>
+        <button id="oEnd" class="btn btn-danger">End session</button>
+      </div>
+      <p class="ov-fine">“Back to library” keeps the session running for a couple of minutes so you can resume.</p>
+    </aside>
+    <input id="textInput" class="input" placeholder="Type, then press Enter" autocomplete="off" autocapitalize="off" hidden>
+    <!-- Shown when the game closes and the server stops relaunching it ({t:'game', state:'exited'}) -->
+    <div id="ended" hidden>
+      <div class="ended-card" role="dialog" aria-modal="true" aria-labelledby="eTitle">
+        <div class="launch-art ended-art" id="eArt"></div>
+        <h2 id="eTitle">Game closed</h2>
+        <p class="ended-sub">Your session is still running. Restart the game, or go back to the library to end the session.</p>
+        <div class="ended-actions">
+          <button id="eRestart" class="btn btn-play">Restart game</button>
+          <button id="eLeave" class="btn btn-glass">Back to library</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-foot" id="siteFoot">
+    <span>Rose</span><span class="sep">·</span><a href="#host">Host a Rose node</a>
+  </footer>
+
+  <div id="toasts"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
